@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import io from 'socket.io-client';
 
 const socket = io('http://localhost:3000');
@@ -13,8 +13,13 @@ function Streamer() {
   const [isStreaming, setIsStreaming] =
     useState(false);
 
+  const [messages, setMessages] = useState([]);
+
+  const [message, setMessage] =
+    useState('');
+
   // START STREAM
-  const startStreaming = async () => {
+  const startStream = async () => {
     try {
       const localStream =
         await navigator.mediaDevices.getUserMedia({
@@ -25,197 +30,266 @@ function Streamer() {
       localStreamRef.current =
         localStream;
 
-      if (videoRef.current) {
-        videoRef.current.srcObject =
-          localStream;
-      }
+      videoRef.current.srcObject =
+        localStream;
 
       socket.emit('join-room', 'room1');
-
-      peerConnection.current =
-        new RTCPeerConnection();
-
-      localStream
-        .getTracks()
-        .forEach((track) => {
-          peerConnection.current.addTrack(
-            track,
-            localStream,
-          );
-        });
-
-      peerConnection.current.onicecandidate =
-        (event) => {
-          if (event.candidate) {
-            socket.emit('ice-candidate', {
-              roomId: 'room1',
-              candidate: event.candidate,
-            });
-          }
-        };
-
-      const offer =
-        await peerConnection.current.createOffer();
-
-      await peerConnection.current.setLocalDescription(
-        offer,
-      );
-
-      socket.emit('offer', {
-        roomId: 'room1',
-        offer,
-      });
-
-      socket.on('answer', async (answer) => {
-        await peerConnection.current.setRemoteDescription(
-          new RTCSessionDescription(answer),
-        );
-      });
-
-      socket.on(
-        'ice-candidate',
-        async (candidate) => {
-          try {
-            await peerConnection.current.addIceCandidate(
-              new RTCIceCandidate(candidate),
-            );
-          } catch (err) {
-            console.log(err);
-          }
-        },
-      );
 
       setIsStreaming(true);
     } catch (error) {
       console.log(error);
-
-      alert(
-        'Camera or microphone access denied',
-      );
     }
   };
 
+  // VIEWER JOINED
+  useEffect(() => {
+    socket.on(
+      'viewer-joined',
+      async () => {
+        if (
+          !localStreamRef.current
+        )
+          return;
+
+        // CLOSE OLD CONNECTION
+        if (
+          peerConnection.current
+        ) {
+          peerConnection.current.close();
+        }
+
+        peerConnection.current =
+          new RTCPeerConnection();
+
+        // ADD TRACKS
+        localStreamRef.current
+          .getTracks()
+          .forEach((track) => {
+            peerConnection.current.addTrack(
+              track,
+              localStreamRef.current,
+            );
+          });
+
+        // ICE
+        peerConnection.current.onicecandidate =
+          (event) => {
+            if (event.candidate) {
+              socket.emit(
+                'ice-candidate',
+                {
+                  roomId: 'room1',
+                  candidate:
+                    event.candidate,
+                },
+              );
+            }
+          };
+
+        // CREATE OFFER
+        const offer =
+          await peerConnection.current.createOffer();
+
+        await peerConnection.current.setLocalDescription(
+          offer,
+        );
+
+        socket.emit('offer', {
+          roomId: 'room1',
+          offer,
+        });
+      },
+    );
+
+    // ANSWER
+    socket.on(
+      'answer',
+      async (answer) => {
+        try {
+          if (
+            peerConnection.current
+          ) {
+            await peerConnection.current.setRemoteDescription(
+              new RTCSessionDescription(
+                answer,
+              ),
+            );
+          }
+        } catch (err) {
+          console.log(err);
+        }
+      },
+    );
+
+    // ICE RECEIVE
+    socket.on(
+      'ice-candidate',
+      async (candidate) => {
+        try {
+          if (
+            peerConnection.current
+          ) {
+            await peerConnection.current.addIceCandidate(
+              new RTCIceCandidate(
+                candidate,
+              ),
+            );
+          }
+        } catch (err) {
+          console.log(err);
+        }
+      },
+    );
+
+    // CHAT
+    socket.on(
+      'chat-message',
+      (data) => {
+        setMessages((prev) => {
+          return [...prev, data];
+        });
+      },
+    );
+
+    return () => {
+      socket.off('viewer-joined');
+      socket.off('answer');
+      socket.off('ice-candidate');
+      socket.off('chat-message');
+    };
+  }, []);
+
   // END STREAM
-  const endStreaming = () => {
-    // STOP CAMERA + MIC
+  const endStream = () => {
     if (localStreamRef.current) {
       localStreamRef.current
         .getTracks()
-        .forEach((track) => {
-          track.stop();
-        });
+        .forEach((track) =>
+          track.stop(),
+        );
     }
 
-    // CLOSE PEER CONNECTION
     if (peerConnection.current) {
       peerConnection.current.close();
     }
 
-    // REMOVE VIDEO
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
+    videoRef.current.srcObject = null;
 
     setIsStreaming(false);
+
+    setMessages([]);
+
+    socket.emit('stream-ended');
+  };
+
+  // SEND MESSAGE
+  const sendMessage = () => {
+    if (!message.trim()) return;
+
+    socket.emit('chat-message', {
+      roomId: 'room1',
+      sender: 'Streamer',
+      message,
+    });
+
+    setMessage('');
+  };
+
+  // ENTER KEY
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      sendMessage();
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-8">
-      <div className="max-w-6xl mx-auto">
-        {/* HEADER */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-4xl font-bold text-red-500">
-              Streamer Dashboard
-            </h1>
+    <div className="min-h-screen bg-[#020817] text-white p-10">
+      <div className="flex justify-between items-center mb-10">
+        <h1 className="text-6xl font-bold text-red-500">
+          Streamer Dashboard
+        </h1>
 
-            <p className="text-gray-400 mt-2">
-              Live broadcasting panel
-            </p>
-          </div>
-
-          {isStreaming && (
-            <div className="flex items-center gap-2 bg-red-500 px-4 py-2 rounded-full">
-              <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
-
-              <span className="font-semibold">
-                LIVE
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* VIDEO PANEL */}
-        <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 shadow-2xl">
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            className="w-full rounded-2xl"
-          />
-        </div>
-
-        {/* BUTTONS */}
-        <div className="flex gap-4 mt-6">
+        {!isStreaming ? (
           <button
-            onClick={startStreaming}
-            disabled={isStreaming}
-            className="bg-green-500 hover:bg-green-600 disabled:bg-gray-700 px-6 py-3 rounded-xl font-semibold"
+            onClick={startStream}
+            className="bg-green-600 hover:bg-green-700 px-8 py-4 rounded-2xl text-xl font-bold"
           >
             Start Stream
           </button>
-
+        ) : (
           <button
-            onClick={endStreaming}
-            disabled={!isStreaming}
-            className="bg-red-500 hover:bg-red-600 disabled:bg-gray-700 px-6 py-3 rounded-xl font-semibold"
+            onClick={endStream}
+            className="bg-red-600 hover:bg-red-700 px-8 py-4 rounded-2xl text-xl font-bold"
           >
             End Stream
           </button>
-        </div>
-
-        {/* INFO CARDS */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-            <h2 className="text-xl font-semibold mb-2">
-              Stream Status
-            </h2>
-
-            <p
-              className={
-                isStreaming
-                  ? 'text-green-400'
-                  : 'text-red-400'
-              }
-            >
-              {isStreaming
-                ? 'Broadcasting Active'
-                : 'Stream Offline'}
-            </p>
-          </div>
-
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-            <h2 className="text-xl font-semibold mb-2">
-              Resolution
-            </h2>
-
-            <p className="text-gray-300">
-              1280 × 720 HD
-            </p>
-          </div>
-
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-            <h2 className="text-xl font-semibold mb-2">
-              Audio
-            </h2>
-
-            <p className="text-gray-300">
-              Microphone Connected
-            </p>
-          </div>
-        </div>
+        )}
       </div>
+
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className="w-full max-w-5xl rounded-3xl border border-gray-700 mb-10"
+      />
+
+      {isStreaming && (
+        <div className="bg-gray-900 p-6 rounded-3xl max-w-2xl border border-gray-700">
+          <h2 className="text-3xl font-bold mb-6">
+            Live Chat
+          </h2>
+
+          <div className="bg-gray-800 rounded-2xl h-[300px] overflow-y-auto p-4 mb-5">
+            {messages.length === 0 ? (
+              <p className="text-gray-400">
+                No messages yet...
+              </p>
+            ) : (
+              messages.map(
+                (msg, index) => (
+                  <div
+                    key={index}
+                    className="mb-3"
+                  >
+                    <span className="font-bold text-red-400">
+                      {
+                        msg.sender
+                      }
+                      :
+                    </span>{' '}
+                    {msg.message}
+                  </div>
+                ),
+              )
+            )}
+          </div>
+
+          <div className="flex gap-4">
+            <input
+              type="text"
+              value={message}
+              onChange={(e) =>
+                setMessage(
+                  e.target.value,
+                )
+              }
+              onKeyDown={
+                handleKeyDown
+              }
+              placeholder="Type message..."
+              className="flex-1 bg-gray-800 p-4 rounded-2xl outline-none"
+            />
+
+            <button
+              onClick={sendMessage}
+              className="bg-red-600 hover:bg-red-700 px-6 rounded-2xl font-bold"
+            >
+              Send
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

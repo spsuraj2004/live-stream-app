@@ -36,34 +36,32 @@ function Login({
         {
           email,
           password,
-        }
+        },
       );
 
-      // CHECK TOKEN
+      // SUCCESS LOGIN
       if (
         response.data &&
         response.data.access_token
       ) {
-        // SAVE TOKEN
+        // STORE TOKEN
         localStorage.setItem(
           'token',
-          response.data.access_token
+          response.data.access_token,
         );
 
-        // SAVE ROLE
+        // STORE ROLE
         localStorage.setItem(
           'role',
-          response.data.role
+          response.data.role,
         );
 
-        // UPDATE APP STATE
+        // UPDATE STATES
         setIsLoggedIn(true);
 
         setRole(response.data.role);
 
-        alert('Login successful');
-
-        // ROLE BASED REDIRECT
+        // REDIRECT
         if (
           response.data.role ===
           'streamer'
@@ -87,6 +85,13 @@ function Login({
     }
   };
 
+  // ENTER KEY LOGIN
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleLogin();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-gray-900 border border-gray-800 rounded-3xl p-10 shadow-2xl">
@@ -101,7 +106,7 @@ function Login({
           </p>
         </div>
 
-        {/* EMAIL INPUT */}
+        {/* EMAIL */}
         <div className="mb-5">
           <label className="block mb-2 text-sm text-gray-300">
             Email
@@ -114,11 +119,14 @@ function Login({
             onChange={(e) =>
               setEmail(e.target.value)
             }
+            onKeyDown={
+              handleKeyDown
+            }
             className="w-full p-4 rounded-xl bg-gray-800 border border-gray-700 text-white outline-none focus:border-red-500"
           />
         </div>
 
-        {/* PASSWORD INPUT */}
+        {/* PASSWORD */}
         <div className="mb-6">
           <label className="block mb-2 text-sm text-gray-300">
             Password
@@ -129,7 +137,12 @@ function Login({
             placeholder="Enter your password"
             value={password}
             onChange={(e) =>
-              setPassword(e.target.value)
+              setPassword(
+                e.target.value,
+              )
+            }
+            onKeyDown={
+              handleKeyDown
             }
             className="w-full p-4 rounded-xl bg-gray-800 border border-gray-700 text-white outline-none focus:border-red-500"
           />
@@ -139,7 +152,11 @@ function Login({
         <button
           onClick={handleLogin}
           disabled={loading}
-          className="w-full bg-red-500 hover:bg-red-600 disabled:bg-gray-700 transition-all duration-300 p-4 rounded-xl font-bold text-lg"
+          className={`w-full p-4 rounded-xl font-bold text-lg transition-all duration-300 ${
+            loading
+              ? 'bg-gray-700 cursor-not-allowed'
+              : 'bg-red-500 hover:bg-red-600'
+          }`}
         >
           {loading
             ? 'Logging in...'
@@ -175,7 +192,8 @@ function Login({
             </p>
 
             <p className="text-sm text-gray-300">
-              Email: viewer@gmail.com
+              Email:
+              viewer@gmail.com
             </p>
 
             <p className="text-sm text-gray-300">

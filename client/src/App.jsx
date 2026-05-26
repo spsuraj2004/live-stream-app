@@ -1,14 +1,10 @@
 import {
   Routes,
   Route,
-  Link,
   useNavigate,
 } from 'react-router-dom';
 
-import {
-  useEffect,
-  useState,
-} from 'react';
+import { useEffect, useState } from 'react';
 
 import Login from './pages/Login';
 import Streamer from './pages/Streamer';
@@ -25,7 +21,6 @@ function App() {
 
   const navigate = useNavigate();
 
-  // CHECK LOCAL STORAGE ON PAGE LOAD
   useEffect(() => {
     const token =
       localStorage.getItem('token');
@@ -42,7 +37,6 @@ function App() {
     }
   }, []);
 
-  // LOGOUT FUNCTION
   const logout = () => {
     localStorage.removeItem('token');
 
@@ -58,69 +52,42 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       {/* NAVBAR */}
-      <nav className="flex items-center justify-between px-8 py-4 bg-black border-b border-gray-800">
-        {/* LOGO */}
-        <h1 className="text-2xl font-bold text-red-500">
+      <nav className="flex items-center justify-between px-8 py-5 bg-black border-b border-gray-800">
+        <h1
+          className="text-3xl font-bold text-red-500 cursor-pointer"
+          onClick={() => {
+            if (role === 'streamer') {
+              navigate('/streamer');
+            } else if (
+              role === 'viewer'
+            ) {
+              navigate('/viewer');
+            }
+          }}
+        >
           StreamX
         </h1>
 
-        {/* NAVIGATION */}
-        <div className="flex gap-6 items-center">
-          {/* LOGIN */}
-          {!isLoggedIn && (
-            <Link
-              to="/"
-              className="hover:text-red-400 transition"
+        {isLoggedIn && (
+          <div className="flex items-center gap-6">
+            <div className="bg-gray-800 px-5 py-2 rounded-xl">
+              {role === 'streamer'
+                ? 'Streamer Dashboard'
+                : 'Viewer Dashboard'}
+            </div>
+
+            <button
+              onClick={logout}
+              className="bg-red-500 hover:bg-red-600 px-5 py-2 rounded-xl font-bold"
             >
-              Login
-            </Link>
-          )}
-
-          {/* STREAMER NAVBAR */}
-          {isLoggedIn &&
-            role === 'streamer' && (
-              <>
-                <Link
-                  to="/streamer"
-                  className="hover:text-red-400 transition"
-                >
-                  Streamer Dashboard
-                </Link>
-
-                <button
-                  onClick={logout}
-                  className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg transition"
-                >
-                  Logout
-                </button>
-              </>
-            )}
-
-          {/* VIEWER NAVBAR */}
-          {isLoggedIn &&
-            role === 'viewer' && (
-              <>
-                <Link
-                  to="/viewer"
-                  className="hover:text-red-400 transition"
-                >
-                  Viewer Dashboard
-                </Link>
-
-                <button
-                  onClick={logout}
-                  className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg transition"
-                >
-                  Logout
-                </button>
-              </>
-            )}
-        </div>
+              Logout
+            </button>
+          </div>
+        )}
       </nav>
 
       {/* ROUTES */}
       <Routes>
-        {/* LOGIN PAGE */}
         <Route
           path="/"
           element={
@@ -133,7 +100,6 @@ function App() {
           }
         />
 
-        {/* STREAMER PAGE */}
         <Route
           path="/streamer"
           element={
@@ -143,7 +109,6 @@ function App() {
           }
         />
 
-        {/* VIEWER PAGE */}
         <Route
           path="/viewer"
           element={
